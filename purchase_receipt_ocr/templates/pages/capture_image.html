@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Capture Material Label</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+        }
+        .camera-container {
+            position: relative;
+            margin: 20px 0;
+        }
+        .camera-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border: 2px solid #4CAF50;
+            pointer-events: none;
+        }
+        #capture {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        #capture:hover {
+            background-color: #45a049;
+        }
+        .status-message {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .error { background-color: #ffebee; color: #c62828; }
+        .success { background-color: #e8f5e9; color: #2e7d32; }
+    </style>
+</head>
+<body>
+    <h2>Capture Material Label</h2>
+    <div class="camera-container">
+        <video id="video" width="640" height="480" autoplay></video>
+        <div class="camera-overlay"></div>
+    </div>
+    <button id="capture">Capture Image</button>
+    <canvas id="canvas" style="display:none;"></canvas>
+    <div id="status" class="status-message"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const video = document.getElementById('video');
+            const captureButton = document.getElementById('capture');
+            const canvas = document.getElementById('canvas');
+            const context = canvas.getContext('2d');
+            const statusDiv = document.getElementById('status');
+
+            // Initialize camera
+            navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    facingMode: 'environment',
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
+                } 
+            })
+            .then(function(stream) {
+                video.srcObject = stream;
+            })
+            .catch(function(error) {
+                showStatus('Error accessing camera: ' + error.message, 'error');
+            });
+
+            function showStatus(message, type) {
+                statusDiv.textContent = message;
+                statusDiv.className = 'status-message ' + type;
+                statusDiv.style.display = 'block';
+            }
+
+            captureButton.addEventListener('click', function() {
+                try {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    const dataUrl = canvas.toDataURL('image/png');
+                    showStatus('Processing image...', 'success');
+
+                    frappe.call({
+                        method: 'purchase_receipt_ocr.purchase_receipt_ocr.doctype.purchase_receipt.purchase_receipt.process_ocr',
+                        args: { image_data: dataUrl },
+                        callback: function(r) {
+                            if (r.message && r.message.status === 'success') {
+                                showStatus('Data extracted successfully', 'success');
+                                setTimeout(() => window.close(), 1500);
+                            } else {
+                                showStatus('Error: ' + (r.message ? r.message.message : 'Unknown error'), 'error');
+                            }
+                        },
+                        error: function(r) {
+                            showStatus('Failed to process image', 'error');
+                        }
+                    });
+                } catch (error) {
+                    showStatus('Error capturing image: ' + error.message, 'error');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
