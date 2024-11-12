@@ -1,0 +1,3 @@
+frappe
+erpnext
+purchase_receipt_ocr
